@@ -1,0 +1,10 @@
+*.tar
+__pycache__/*
+.ipynb_checkpoints/*
+.DS_Store
+._**
+*/**/._*
+checkpoints/*
+plots
+*.ipynb
+__pycache__

@@ -70,13 +70,13 @@ class ZSLNet(nn.Module):
             )
 
 
-    def forward(self, x, labels=None, epoch=0):
+    def forward(self, x, labels=None, epoch=0, n_crops=0, bs=16):
         if self.args.bce_only:
-            return self.forward_bce_only(x, labels=labels)
+            return self.forward_bce_only(x, labels=labels, n_crops=n_crops, bs=bs)
         else:
-            return self.forward_ranking(x, labels=labels, epoch=epoch)
+            return self.forward_ranking(x, labels=labels, epoch=epoch, n_crops=n_crops, bs=bs)
 
-    def forward_bce_only(self, x, labels=None):
+    def forward_bce_only(self, x, labels=None, n_crops=0, bs=16):
         lossvalue_bce = torch.zeros(1).to(self.device)
 
         visual_feats = self.vision_backbone(x)
@@ -88,7 +88,7 @@ class ZSLNet(nn.Module):
         return preds, lossvalue_bce, f'bce:\t {lossvalue_bce.item():0.4f}'
     
 
-    def forward_ranking(self, x, labels=None, epoch=0):
+    def forward_ranking(self, x, labels=None, epoch=0, n_crops=0, bs=16):
         loss_rank = torch.zeros(1).to(self.device)
         loss_allignment_cos = torch.zeros(1).to(self.device)
         loss_mapping_consistency = torch.zeros(1).to(self.device)
@@ -116,6 +116,9 @@ class ZSLNet(nn.Module):
 
 
         ranks = self.sim_score(visual_feats, text_feats)
+        if n_crops > 0:
+            ranks = ranks.view(bs, n_crops, -1).mean(1)
+
 
         if labels is not None:
             loss_rank = self.ranking_loss(ranks, labels, self.class_ids_loaded, self.device)

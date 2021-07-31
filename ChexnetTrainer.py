@@ -111,10 +111,8 @@ class ChexnetTrainer(object):
         train_transforms.append(normalize)      
 
         datasetTrain = NIHChestXray(self.args, self.args.train_file, transform=transforms.Compose(train_transforms))
-        datasetVal =   NIHChestXray(self.args, self.args.val_file, transform=transforms.Compose(train_transforms))
 
         self.train_dl = DataLoader(dataset=datasetTrain, batch_size=self.args.batch_size, shuffle=True,  num_workers=4, pin_memory=True)
-        self.val_dl = DataLoader(dataset=datasetVal, batch_size=self.args.batch_size*10, shuffle=False, num_workers=4, pin_memory=True)
 
 
         test_transforms = []
@@ -123,6 +121,10 @@ class ChexnetTrainer(object):
         test_transforms.append(transforms.Lambda(lambda crops: torch.stack([transforms.ToTensor()(crop) for crop in crops])))
         test_transforms.append(transforms.Lambda(lambda crops: torch.stack([normalize(crop) for crop in crops])))
         
+
+        datasetVal =   NIHChestXray(self.args, self.args.val_file, transform=transforms.Compose(test_transforms))
+        self.val_dl = DataLoader(dataset=datasetVal, batch_size=self.args.batch_size*10, shuffle=False, num_workers=4, pin_memory=True)
+
         datasetTest = NIHChestXray(self.args, self.args.test_file, transform=transforms.Compose(test_transforms), classes_to_load='all')
         self.test_dl = DataLoader(dataset=datasetTest, batch_size=self.args.batch_size*3, num_workers=8, shuffle=False, pin_memory=True)
         print(datasetTest.CLASSES)
@@ -222,9 +224,15 @@ class ChexnetTrainer(object):
             
                 target = target.to(self.device)
                 inputs = inputs.to(self.device)
-                varInput = torch.autograd.Variable(inputs)
                 varTarget = torch.autograd.Variable(target)    
-                varOutput, losstensor = self.model(varInput, varTarget)
+                bs, n_crops, c, h, w = inputs.size()
+
+                varInput = torch.autograd.Variable(inputs.view(-1, c, h, w).to(self.device))
+
+                varOutput, losstensor = self.model(varInput, varTarget, n_crops=n_crops, bs=bs)
+
+
+                
 
                 outPRED = torch.cat((outPRED, varOutput), 0)
                 outGT = torch.cat((outGT, target), 0)
@@ -256,10 +264,9 @@ class ChexnetTrainer(object):
                 
                 varInput = torch.autograd.Variable(inputs.view(-1, c, h, w).to(self.device))
                 
-                out, _ = self.model(varInput)
-                outMean = out.view(bs, n_crops, -1).mean(1)
+                out, _ = self.model(varInput, n_crops=n_crops, bs=bs)
                 
-                outPRED = torch.cat((outPRED, outMean.data), 0)
+                outPRED = torch.cat((outPRED, out.data), 0)
                 
 
 
@@ -275,7 +282,6 @@ class ChexnetTrainer(object):
         datanpPRED = dataPRED.cpu().numpy()
 
         for i in class_ids:
-            # np.unique(np.array(self.val_dl.dataset.class_ids_loaded)):  
             outAUROC.append(roc_auc_score(datanpGT[:, i], datanpPRED[:, i]))
         return outAUROC
 

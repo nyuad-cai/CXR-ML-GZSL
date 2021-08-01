@@ -197,7 +197,7 @@ class ChexnetTrainer(object):
             target = target.to(self.device)
             inputs = inputs.to(self.device)
             output, loss = self.model(inputs, target, self.epoch)
-            
+
 
             self.optimizer.zero_grad()
             loss.backward()
